@@ -12,6 +12,9 @@ import re
 import argparse
 
 v = 0
+usage = """sage: hb-scan.py [-h] [-o OUTPUT] [-p PORT] [--timeout TIMEOUT] [-v]
+                  ([-f FILE] | [ip [ip ...]] )
+"""
 
 def h2bin(x):
     return x.replace(' ', '').replace('\n', '').decode('hex')
@@ -144,16 +147,20 @@ def write_vul_address(outFile, target):
 
 def main():
     global v
-    parser = argparse.ArgumentParser(description="Basic scanner for the Heartbeat vulnerability")
-    group = parser.add_mutually_exclusive_group(required=True)
-    parser.add_argument("-o", "--output", help="File with vulnerable hosts")
-    parser.add_argument("-p", "--port", type=int, default=443, help="TCP port the scan default=443")
-    parser.add_argument("--timeout", type=int, default=1, help="Set timeout default=1 second")
+    parser = argparse.ArgumentParser(description="Basic scanner for the Heartbeat vulnerability", usage=usage)
+    parser.add_argument("-o", "--output", help="File to write vulnerable hosts to.")
+    parser.add_argument("-p", "--port", type=int, default=443, help="TCP port the scan. default=443")
+    parser.add_argument("--timeout", type=int, default=1, help="Set timeout in seconds. default=1")
     parser.add_argument("-v", dest="verbosity", action="count", default=0, help="Prints verbose output")
-    group.add_argument("-f", "--file", help="File with hosts to scan")
-    group.add_argument("-i", "--ips", metavar="ip", nargs="+")
+    parser.add_argument("-f", "--file", help="File with hosts to scan")
+    parser.add_argument("ips", metavar="ip", nargs="*")
 
     args = parser.parse_args()
+
+    if args.file and args.ips:
+        parser.error("Must choose file or ip list")
+    if not (args.file or args.ips):
+        parser.error("Must provide ips or an input file")
 
     socket.setdefaulttimeout(args.timeout)
     if args.verbosity > 0: v = args.verbosity
