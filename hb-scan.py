@@ -102,7 +102,6 @@ def hit_hb(s):
             if v > 2: hexdump(pay)
             if v > 1: print 'Server returned error, likely not vulnerable'
             return False
-        return False
 
 def scan_hb(address, port):
 
