@@ -81,14 +81,14 @@ def recvall(s, length, timeout=5):
 def recvmsg(s):
     hdr = recvall(s, 5)
     if hdr is None:
-        if v > 0: print 'Unexpected EOF receiving record header - server closed connection'
+        output('Unexpected EOF receiving record header - server closed connection', 1)
         return None, None, None
     typ, ver, ln = struct.unpack('>BHH', hdr)
     pay = recvall(s, ln, 10)
     if pay is None:
-        if v > 0: print 'Unexpected EOF receiving record payload - server closed connection'
+        output('Unexpected EOF receiving record payload - server closed connection', 1)
         return None, None, None
-    if v > 1: print ' ... received message: type = %d, ver = %04x, length = %d' % (typ, ver, len(pay))
+    output(' ... received message: type = %d, ver = %04x, length = %d' % (typ, ver, len(pay)), 2)
     return typ, ver, pay
 
 def hit_hb(s):
@@ -99,7 +99,7 @@ def hit_hb(s):
             return False
 
         if typ == 24:
-            if v > 1: print 'Received heartbeat response:'
+            output('Received heartbeat response:', 2)
             if v > 2: hexdump(pay)
             if len(pay) > 3:
                 return True
@@ -109,7 +109,7 @@ def hit_hb(s):
 
         if typ == 21:
             if v > 2: hexdump(pay)
-            if v > 1: print 'Server returned error, likely not vulnerable'
+            output('Server returned error, likely not vulnerable', 2)
             return False
 
 def scan_hb(address, port):
@@ -131,15 +131,14 @@ def scan_hb(address, port):
 
 
 def scan_port(host, port):
-    if v > 0:
-        print "Scanning %s:%d" % (host, port)
+    output("Scanning %s:%d" % (host, port), 1)
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         s.connect((host, port))
         s.close()
         return 0
     except socket.timeout:
-        if v > 2: print "Socket timed out on %s:%d" % (host, port)
+        output("Socket timed out on %s:%d" % (host, port), 3)
         return 1
     except socket.error:
         return 2
@@ -171,6 +170,12 @@ def processTargets(targets):
         else:
             pTar.add(target)
     return pTar
+
+
+def output(string, verbose=0):
+    if v >= verbose:
+        print string
+
 
 def main():
     global v
