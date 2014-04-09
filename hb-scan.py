@@ -11,6 +11,12 @@ import select
 import re
 import argparse
 
+try:
+    import netaddr
+except ImportError:
+    print "netaddr required. Install with \"pip install netaddr\""
+    sys.exit()
+
 v = 0
 usage = """sage: hb-scan.py [-h] [-o OUTPUT] [-p PORT] [--timeout TIMEOUT] [-v]
                   ([-f FILE] | [ip [ip ...]] )
@@ -145,6 +151,27 @@ def write_vul_address(outFile, target):
         output.close()
 
 
+def processTargets(targets):
+    pTar = set()
+    for target in targets:
+        try:
+            socket.inet_aton(target)
+        except socket.error:
+            try:
+                for ip in netaddr.IPNetwork(target):
+                    pTar.add(str(ip))
+            except netaddr.core.AddrFormatError:
+                try:
+                    socket.gethostbyname(target)
+                except socket.gaierror:
+                    print "Invalid host/ip found:", target
+                    sys.exit(1)
+                else:
+                    pTar.add(target)
+        else:
+            pTar.add(target)
+    return pTar
+
 def main():
     global v
     parser = argparse.ArgumentParser(description="Basic scanner for the Heartbeat vulnerability", usage=usage)
@@ -167,9 +194,9 @@ def main():
 
     if args.file:
         with open(args.file) as inFile:
-            targets = [ target.strip() for target in inFile.readlines() ]
+            targets = processTargets([ target.strip() for target in inFile.readlines() ])
     else:
-        targets = args.ips
+        targets = processTargets(args.ips)
 
     for target in targets:
         result =  scan_port(target, args.port)
