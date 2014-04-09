@@ -189,6 +189,9 @@ def main():
     if not (args.file or args.ips):
         parser.error("Must provide ips or an input file")
 
+    ## Clears output file
+    if args.output: open(args.output, "w").close()
+
     socket.setdefaulttimeout(args.timeout)
     if args.verbosity > 0: v = args.verbosity
 
