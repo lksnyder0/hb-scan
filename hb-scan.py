@@ -91,7 +91,7 @@ def hit_hb(s):
 
         if typ == 24:
             if v > 1: print 'Received heartbeat response:'
-            if v > 2: print hexdump(pay)
+            if v > 2: hexdump(pay)
             if len(pay) > 3:
                 return True
             else:
@@ -157,7 +157,6 @@ def main():
 
     socket.setdefaulttimeout(args.timeout)
     if args.verbosity > 0: v = args.verbosity
-    print v
 
     if args.file:
         with open(args.file) as inFile:
