@@ -11,6 +11,8 @@ import select
 import re
 import argparse
 
+v = 0
+
 def h2bin(x):
     return x.replace(' ', '').replace('\n', '').decode('hex')
 
@@ -37,6 +39,14 @@ hb = h2bin('''
 01 40 00
 ''')
 
+def hexdump(s):
+    for b in xrange(0, len(s), 16):
+        lin = [c for c in s[b : b + 16]]
+        hxdat = ' '.join('%02X' % ord(c) for c in lin)
+        pdat = ''.join((c if 32 <= ord(c) <= 126 else '.' )for c in lin)
+        print ' %04x: %-48s %s' % (b, hxdat, pdat)
+    print
+
 def recvall(s, length, timeout=5):
     endtime = time.time() + timeout
     rdata = ''
@@ -62,11 +72,14 @@ def recvall(s, length, timeout=5):
 def recvmsg(s):
     hdr = recvall(s, 5)
     if hdr is None:
+        if v > 0: print 'Unexpected EOF receiving record header - server closed connection'
         return None, None, None
     typ, ver, ln = struct.unpack('>BHH', hdr)
     pay = recvall(s, ln, 10)
     if pay is None:
+        if v > 0: print 'Unexpected EOF receiving record payload - server closed connection'
         return None, None, None
+    if v > 1: print ' ... received message: type = %d, ver = %04x, length = %d' % (typ, ver, len(pay))
     return typ, ver, pay
 
 def hit_hb(s):
@@ -77,6 +90,8 @@ def hit_hb(s):
             return False
 
         if typ == 24:
+            if v > 1: print 'Received heartbeat response:'
+            if v > 2: print hexdump(pay)
             if len(pay) > 3:
                 return True
             else:
@@ -84,8 +99,10 @@ def hit_hb(s):
             return False
 
         if typ == 21:
-            hexdump(pay)
+            if v > 2: hexdump(pay)
+            if v > 1: print 'Server returned error, likely not vulnerable'
             return False
+        return False
 
 def scan_hb(address, port):
 
@@ -106,13 +123,15 @@ def scan_hb(address, port):
 
 
 def scan_port(host, port):
-    #try:
+    if v > 0:
+        print "Scanning %s:%d" % (host, port)
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         s.connect((host, port))
         s.close()
         return 0
     except socket.timeout:
+        if v > 2: print "Socket timed out on %s:%d" % (host, port)
         return 1
     except:
         return 2
@@ -125,17 +144,21 @@ def write_vul_address(outFile, target):
 
 
 def main():
+    global v
     parser = argparse.ArgumentParser(description="Basic scanner for the Heartbeat vulnerability")
     group = parser.add_mutually_exclusive_group(required=True)
     parser.add_argument("-o", "--output", help="File with vulnerable hosts")
     parser.add_argument("-p", "--port", type=int, default=443, help="TCP port the scan default=443")
     parser.add_argument("--timeout", type=int, default=1, help="Set timeout default=1 second")
+    parser.add_argument("-v", dest="verbosity", action="count", default=0, help="Prints verbose output")
     group.add_argument("-f", "--file", help="File with hosts to scan")
     group.add_argument("-i", "--ips", metavar="ip", nargs="+")
 
     args = parser.parse_args()
 
     socket.setdefaulttimeout(args.timeout)
+    if args.verbosity > 0: v = args.verbosity
+    print v
 
     if args.file:
         with open(args.file) as inFile:
