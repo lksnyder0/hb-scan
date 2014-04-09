@@ -141,7 +141,7 @@ def scan_port(host, port):
     except socket.timeout:
         if v > 2: print "Socket timed out on %s:%d" % (host, port)
         return 1
-    except:
+    except socket.error:
         return 2
 
 
@@ -214,4 +214,8 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print "Quiting"
+        sys.exit()
